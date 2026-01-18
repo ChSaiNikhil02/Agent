@@ -83,8 +83,7 @@ const Index = () => {
                   onMotionChange={setMotionStyle}
                   duration={duration}
                   onDurationChange={setDuration}
-                  cameraFixed={false} // This prop is no longer used but kept for component compatibility
-                  onCameraFixedChange={() => {}} // Dummy function
+
                 />
               </div>
             </div>

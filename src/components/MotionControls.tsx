@@ -3,11 +3,11 @@ import {
   ZoomOut, 
   MoveHorizontal, 
   RotateCcw,
-  Sparkles,
+
   Video
 } from 'lucide-react';
 
-export type MotionStyle = 'zoom-in' | 'zoom-out' | 'pan' | 'orbit' | 'dynamic';
+export type MotionStyle = 'zoom-in' | 'zoom-out' | 'pan' | 'orbit';
 export type Duration = 5 | 10;
 
 interface MotionControlsProps {
@@ -15,8 +15,7 @@ interface MotionControlsProps {
   onMotionChange: (style: MotionStyle) => void;
   duration: Duration;
   onDurationChange: (duration: Duration) => void;
-  cameraFixed: boolean;
-  onCameraFixedChange: (fixed: boolean) => void;
+
 }
 
 const motionOptions: { value: MotionStyle; label: string; icon: React.ReactNode; description: string }[] = [
@@ -24,7 +23,7 @@ const motionOptions: { value: MotionStyle; label: string; icon: React.ReactNode;
   { value: 'zoom-out', label: 'Zoom Out', icon: <ZoomOut className="w-4 h-4" />, description: 'Pull back' },
   { value: 'pan', label: 'Pan', icon: <MoveHorizontal className="w-4 h-4" />, description: 'Side motion' },
   { value: 'orbit', label: 'Orbit', icon: <RotateCcw className="w-4 h-4" />, description: 'Circle around' },
-  { value: 'dynamic', label: 'Dynamic', icon: <Sparkles className="w-4 h-4" />, description: 'AI decides' },
+
 ];
 
 export const MotionControls = ({
@@ -32,8 +31,7 @@ export const MotionControls = ({
   onMotionChange,
   duration,
   onDurationChange,
-  cameraFixed,
-  onCameraFixedChange,
+
 }: MotionControlsProps) => {
   return (
     <div className="space-y-6">
@@ -75,24 +73,7 @@ export const MotionControls = ({
         </div>
       </div>
 
-      {/* Camera Stability */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-foreground">Camera Stability</label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onCameraFixedChange(false)}
-            className={`control-chip flex-1 ${!cameraFixed ? 'active' : ''}`}
-          >
-            Natural Motion
-          </button>
-          <button
-            onClick={() => onCameraFixedChange(true)}
-            className={`control-chip flex-1 ${cameraFixed ? 'active' : ''}`}
-          >
-            Stabilized
-          </button>
-        </div>
-      </div>
+
     </div>
   );
 };
