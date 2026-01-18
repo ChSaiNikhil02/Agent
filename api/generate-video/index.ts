@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const createJobResponse = await fetch('https://api.deapi.ai/v2/jobs', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DEAPI_TOKEN}`,
+        'x-api-key': `${DEAPI_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
       const pollResponse = await fetch(`https://api.deapi.ai/v2/jobs/${jobId}`, {
         headers: {
-          'Authorization': `Bearer ${DEAPI_TOKEN}`,
+          'x-api-key': `${DEAPI_TOKEN}`,
         },
       });
 
