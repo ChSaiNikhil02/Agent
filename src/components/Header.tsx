@@ -19,10 +19,7 @@ export const Header = () => {
           </div>
         </div>
         
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 border border-border/50">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span className="text-xs text-muted-foreground">Powered by AI</span>
-        </div>
+
       </div>
     </header>
   );
