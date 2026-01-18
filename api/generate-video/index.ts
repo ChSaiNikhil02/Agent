@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-const MODEL_VERSION = '9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351';
+const DEAPI_TOKEN = process.env.REPLICATE_API_TOKEN; // Using the same env var name for user convenience
+const DEAPI_MODEL = 'Ltxv_13B_0_9_8_Distilled_FP8';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -14,53 +14,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   
   try {
-    if (!REPLICATE_API_TOKEN) {
+    if (!DEAPI_TOKEN) {
       throw new Error('REPLICATE_API_TOKEN is not set in environment variables.');
     }
 
-    const { imageBase64, prompt, duration, cameraFixed } = req.body;
+    const { imageBase64, prompt } = req.body;
 
-    const predictionResponse = await fetch('https://api.replicate.com/v1/predictions', {
+    // Step 1: Create the video generation job
+    const createJobResponse = await fetch('https://api.deapi.ai/v2/jobs', {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+        'Authorization': `Bearer ${DEAPI_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        version: MODEL_VERSION,
-        input: {
-          prompt: prompt,
-          image: imageBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, ''),
-          num_frames: duration === 5 ? 24 : 48,
-          motion_strength: cameraFixed ? 0.1 : 1.0, // Adjust motion strength based on cameraFixed
-        },
+        model: DEAPI_MODEL,
+        prompt: prompt,
+        image: imageBase64,
+        // Assuming some default parameters based on common practice
+        height: 576,
+        width: 1024,
+        num_frames: 25,
       }),
     });
 
-    if (!predictionResponse.ok) {
-        const errorBody = await predictionResponse.json();
-        console.error('Replicate API error:', errorBody);
-        return res.status(500).json({ error: `Replicate API error: ${errorBody.detail || 'Failed to start prediction.'}` });
+    if (!createJobResponse.ok) {
+        const errorBody = await createJobResponse.json();
+        console.error('deAPI Job Creation Error:', errorBody);
+        return res.status(500).json({ error: `deAPI Error: ${errorBody.detail || 'Failed to start job.'}` });
     }
 
-    let prediction = await predictionResponse.json();
+    const job = await createJobResponse.json();
+    const jobId = job.id;
 
-    while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const pollResponse = await fetch(prediction.urls.get, {
+    // Step 2: Poll for the job status
+    let finalJobStatus;
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2 seconds
+      const pollResponse = await fetch(`https://api.deapi.ai/v2/jobs/${jobId}`, {
         headers: {
-          'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DEAPI_TOKEN}`,
         },
       });
-      prediction = await pollResponse.json();
+
+      const currentJobStatus = await pollResponse.json();
+
+      if (currentJobStatus.status === 'succeeded' || currentJobStatus.status === 'failed') {
+        finalJobStatus = currentJobStatus;
+        break;
+      }
     }
 
-    if (prediction.status === 'failed') {
-      return res.status(500).json({ error: `Video generation failed: ${prediction.error}` });
+    if (finalJobStatus.status === 'failed') {
+      return res.status(500).json({ error: `Video generation failed: ${finalJobStatus.error_message || 'Unknown error'}` });
     }
+    
+    // The API might store the result in an 'outputs' array
+    const videoUrl = finalJobStatus.outputs?.[0]?.url || null;
 
-    const videoUrl = prediction.output;
+    if (!videoUrl) {
+      return res.status(500).json({ error: 'No video URL found in the final job status.' });
+    }
 
     return res.status(200).json({ videoUrl });
 
