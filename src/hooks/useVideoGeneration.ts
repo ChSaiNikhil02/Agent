@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import type { MotionStyle, Duration } from '@/components/MotionControls';
 
 interface VideoGenerationParams {
   imageBase64: string;
-  prompt: string;
-  duration: 5 | 10;
-  cameraFixed: boolean;
+  motionStyle: MotionStyle;
+  duration: Duration;
 }
 
 interface VideoGenerationResult {
@@ -20,70 +20,133 @@ export const useVideoGeneration = (): VideoGenerationResult => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = async (params: VideoGenerationParams): Promise<string | null> => {
-    setIsGenerating(true);
-    setError(null);
-    setVideoUrl(null);
+  const generate = (params: VideoGenerationParams): Promise<string | null> => {
+    return new Promise((resolve, reject) => {
+      const { imageBase64, motionStyle, duration } = params;
 
-    try {
-      console.log('Starting video generation...', {
-        promptLength: params.prompt.length,
-        duration: params.duration,
-        cameraFixed: params.cameraFixed,
-      });
-
-      const response = await fetch('/api/generate-video', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: params.prompt,
-          imageBase64: params.imageBase64,
-          duration: params.duration,
-          cameraFixed: params.cameraFixed,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate video');
-      }
-      
-      if (!data?.videoUrl) {
-        throw new Error('No video URL returned');
+      if (!imageBase64) {
+        const err = 'No image provided for generation.';
+        setError(err);
+        toast.error(err);
+        return reject(err);
       }
 
-      console.log('Video generated successfully:', data.videoUrl);
-      setVideoUrl(data.videoUrl);
-      toast.success('Video generated successfully!');
-      return data.videoUrl;
+      setIsGenerating(true);
+      setError(null);
+      setVideoUrl(null);
 
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate video';
-      console.error('Video generation error:', errorMessage);
-      setError(errorMessage);
-      
-      // Show appropriate toast based on error type
-      if (errorMessage.includes('Rate limit')) {
-        toast.error('Too many requests', {
-          description: 'Please wait a moment before trying again.',
-        });
-      } else if (errorMessage.includes('Usage limit') || errorMessage.includes('credits')) {
-        toast.error('Usage limit reached', {
-          description: 'Please add credits to continue generating videos.',
-        });
-      } else {
-        toast.error('Generation failed', {
-          description: errorMessage,
-        });
+      const img = new Image();
+      img.src = imageBase64;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Let's use a fixed resolution for predictability
+        const aspectRatio = img.width / img.height;
+        canvas.width = 1024;
+        canvas.height = 1024 / aspectRatio;
+        
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          const err = 'Could not get canvas context.';
+          setError(err);
+          toast.error(err);
+          setIsGenerating(false);
+          return reject(err);
+        }
+
+        try {
+          const stream = canvas.captureStream();
+          const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+          const chunks: Blob[] = [];
+
+          recorder.ondataavailable = (e) => {
+            chunks.push(e.data);
+          };
+
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            setVideoUrl(url);
+            setIsGenerating(false);
+            toast.success('Video generated successfully!');
+            resolve(url);
+          };
+
+          recorder.onerror = (e) => {
+            const err = 'Error during video recording.';
+            console.error(e);
+            setError(err);
+            toast.error(err);
+            setIsGenerating(false);
+            reject(new Error(err));
+          }
+
+          recorder.start();
+
+          let frame = 0;
+          const totalFrames = duration * 60; // 60 fps
+
+          const animate = () => {
+            if (frame >= totalFrames) {
+              recorder.stop();
+              return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+
+            const progress = frame / totalFrames;
+
+            // Map MotionControls props to animation logic
+            if (motionStyle === 'pan') {
+                const pan = (progress - 0.5) * 0.2 * canvas.width;
+                ctx.drawImage(img, pan, 0, canvas.width, canvas.height);
+            } else if (motionStyle === 'zoom-in') {
+                const zoom = 1 + progress * 0.3;
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(zoom, zoom);
+                ctx.translate(-canvas.width / 2, -canvas.height / 2);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            } else if (motionStyle === 'zoom-out') {
+                const zoom = 1 + progress * 0.3;
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(1 / zoom, 1 / zoom);
+                ctx.translate(-canvas.width / 2, -canvas.height / 2);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            } else if (motionStyle === 'orbit') {
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(progress * Math.PI * 0.1);
+                ctx.translate(-canvas.width / 2, -canvas.height / 2);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            } else { // Default or 'dynamic'
+                const pan = (progress - 0.5) * 0.2 * canvas.width;
+                ctx.drawImage(img, pan, 0, canvas.width, canvas.height);
+            }
+
+            ctx.restore();
+            frame++;
+            requestAnimationFrame(animate);
+          };
+
+          animate();
+        } catch (e) {
+          const err = 'Failed to start video generation.';
+          console.error(e);
+          setError(err);
+          toast.error(err);
+          setIsGenerating(false);
+          reject(e);
+        }
+      };
+
+      img.onerror = () => {
+        const err = 'Failed to load image.';
+        setError(err);
+        toast.error(err);
+        setIsGenerating(false);
+        reject(new Error(err));
       }
-      
-      return null;
-    } finally {
-      setIsGenerating(false);
-    }
+    });
   };
 
   return {
