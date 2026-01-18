@@ -127,12 +127,7 @@ const Index = () => {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="py-6 px-4 border-t border-border/30">
-        <div className="max-w-6xl mx-auto text-center text-sm text-muted-foreground">
-          <p>Built with Gemini • Create simple animations in seconds</p>
-        </div>
-      </footer>
+
     </div>
   );
 };
